@@ -3,60 +3,54 @@ import fetch from "node-fetch";
 
 const app = express();
 
-app.get("/rastreio", async (req, res) => {
-  const codigo = req.query.codigo;
+const API_KEY = "SEU_TOKEN_17TRACK";
 
-  if (!codigo) {
-    return res.json({ erro: "Código não informado" });
-  }
+app.get("/rastreio/:codigo", async (req, res) => {
+  const codigo = req.params.codigo;
 
   try {
-    const response = await fetch("https://api.17track.net/track/v2/GetTrackInfo", {
+    // 🔥 TENTA 17TRACK
+    let response = await fetch("https://api.17track.net/track/v2/GetTrackInfo", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "17token": "85DB9B2C3F9DD5921DBA05E25B82FDAC"
+        "17token": API_KEY
       },
       body: JSON.stringify({
         number: [codigo]
       })
     });
 
-    const data = await response.json();
+    let data = await response.json();
 
-    // 🔥 DEBUG (você pode remover depois)
-    console.log("RESPOSTA 17TRACK:");
-    console.log(JSON.stringify(data, null, 2));
+    let eventos = data.data?.[0]?.track_info?.tracking || [];
 
-    // 🔍 segurança pra evitar erro
-    const tracking = data?.data?.[0];
+    // 🔥 FALLBACK (se vazio)
+    if (!eventos || eventos.length === 0) {
+      console.log("⚠️ 17TRACK vazio, tentando fallback...");
 
-    if (!tracking || !tracking.track_info) {
-      return res.json({
-        codigo,
-        eventos: [],
-        aviso: "Nenhuma informação encontrada para este código"
-      });
+      const fallback = await fetch(`https://proxyapp.correios.com.br/v1/sro-rastro/${codigo}`);
+      const fallbackData = await fallback.json();
+
+      eventos = fallbackData.objetos?.[0]?.eventos || [];
     }
 
-    const eventos = (tracking.track_info.tracking || []).map(ev => ({
-      data: ev.time || "",
-      status: ev.status_description || "",
-      local: ev.location || ""
+    const eventosFormatados = eventos.map(ev => ({
+      descricao: ev.status_description || ev.descricao || "Atualização",
+      data: ev.time?.split(" ")[0] || ev.dtHrCriado?.split("T")[0],
+      hora: ev.time?.split(" ")[1] || ev.dtHrCriado?.split("T")[1]?.substring(0,5),
+      local: ev.location || (ev.unidade?.endereco?.cidade + " / " + ev.unidade?.endereco?.uf)
     }));
 
-    res.json({ codigo, eventos });
+    res.json({
+      codigo,
+      status: eventosFormatados[0]?.descricao || "Sem atualização",
+      eventos: eventosFormatados
+    });
 
   } catch (error) {
-    console.error("ERRO:", error);
     res.json({ erro: "Erro ao rastrear" });
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("API de rastreio online 🚀");
-});
-
-app.listen(3000, () => {
-  console.log("Servidor rodando");
-});
+app.listen(3000, () => console.log("Servidor rodando 🚀"));
