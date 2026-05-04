@@ -11,26 +11,29 @@ app.get("/rastreio", async (req, res) => {
   }
 
   try {
-    const response = await fetch(`https://proxyapp.correios.com.br/v1/sro-rastro/${codigo}`, {
+    const response = await fetch("https://api.17track.net/track/v2/GetTrackInfo", {
+      method: "POST",
       headers: {
-        "User-Agent": "Mozilla/5.0",
-        "Referer": "https://rastreamento.correios.com.br/"
-      }
+        "Content-Type": "application/json",
+        "17token": "85DB9B2C3F9DD5921DBA05E25B82FDAC"
+      },
+      body: JSON.stringify({
+        number: [codigo]
+      })
     });
 
     const data = await response.json();
 
-    const eventos = (data.objetos?.[0]?.eventos || []).map(ev => ({
-      data: ev.dtHrCriado?.split("T")[0],
-      hora: ev.dtHrCriado?.split("T")[1]?.substring(0,5),
-      local: ev.unidade?.endereco?.cidade + " / " + ev.unidade?.endereco?.uf,
-      status: ev.descricao
+    const eventos = data.data[0].track_info.tracking.map(ev => ({
+      data: ev.time,
+      status: ev.status_description,
+      local: ev.location
     }));
 
     res.json({ codigo, eventos });
 
   } catch (error) {
-    res.json({ erro: "Falha ao rastrear" });
+    res.json({ erro: "Erro ao rastrear" });
   }
 });
 
